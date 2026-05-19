@@ -1,0 +1,17 @@
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+  font-family: Inter, Arial, Helvetica, sans-serif;
+  background: #f6f8fa;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+* {
+  box-sizing: border-box;
+}

@@ -1,0 +1,54 @@
+services:
+  db:
+    image: mysql:9.0
+    container_name: smart-office-mysql
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-smart_office}
+      MYSQL_USER: ${MYSQL_USER:-office_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-office_pass}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_pass}
+    ports:
+      - "3307:3306"
+    volumes:
+      - smart-office-db-data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: smart-office-booking-api:latest
+    container_name: smart-office-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE:-smart_office}
+      DB_USER: ${MYSQL_USER:-office_user}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-office_pass}
+      JWT_SECRET: ${JWT_SECRET:-smart-office-local-secret}
+      CORS_ORIGIN: http://localhost:8081,http://127.0.0.1:8081,http://localhost:4200
+    ports:
+      - "8080:8080"
+
+  ui:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: smart-office-booking-ui:latest
+    container_name: smart-office-ui
+    depends_on:
+      - api
+    ports:
+      - "8081:80"
+
+volumes:
+  smart-office-db-data:

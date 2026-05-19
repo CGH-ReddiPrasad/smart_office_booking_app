@@ -1,0 +1,241 @@
+<main class="app-shell">
+  <section class="auth-shell" *ngIf="!user">
+    <div class="auth-card">
+      <p class="eyebrow">Marmon Internal Services</p>
+      <h1>Smart Office Booking Portal</h1>
+      <p class="subtitle">Login or create a user to book seats, lunch, and snacks.</p>
+
+      <div class="service-tabs auth-tabs">
+        <button type="button" [class.active]="authMode === 'login'" (click)="authMode = 'login'">Login</button>
+        <button type="button" [class.active]="authMode === 'register'" (click)="authMode = 'register'">Create user</button>
+      </div>
+
+      <form *ngIf="authMode === 'login'" (ngSubmit)="login()">
+        <label class="form-label" for="loginUser">Username</label>
+        <input id="loginUser" class="form-control mb-3" name="loginUser" [(ngModel)]="loginForm.username">
+        <label class="form-label" for="loginPass">Password</label>
+        <input id="loginPass" class="form-control mb-3" name="loginPass" type="password" [(ngModel)]="loginForm.password">
+        <button class="btn btn-primary w-100" type="submit" [disabled]="loading">Login</button>
+        <p class="hint">Employee: employee / Employee&#64;123 | Admin: admin / Admin&#64;123</p>
+      </form>
+
+      <form *ngIf="authMode === 'register'" (ngSubmit)="register()">
+        <div class="auth-grid">
+          <input class="form-control" name="employeeCode" placeholder="Employee code" [(ngModel)]="registerForm.employeeCode">
+          <input class="form-control" name="fullName" placeholder="Full name" [(ngModel)]="registerForm.fullName">
+          <input class="form-control" name="department" placeholder="Department" [(ngModel)]="registerForm.department">
+          <input class="form-control" name="email" placeholder="Email" [(ngModel)]="registerForm.email">
+          <input class="form-control" name="username" placeholder="Username" [(ngModel)]="registerForm.username">
+          <input class="form-control" name="password" placeholder="Password" type="password" [(ngModel)]="registerForm.password">
+          <select class="form-select" name="role" [(ngModel)]="registerForm.role">
+            <option value="EMPLOYEE">Employee</option>
+            <option value="ADMIN">Admin</option>
+          </select>
+        </div>
+        <button class="btn btn-primary w-100 mt-3" type="submit" [disabled]="loading">Create user</button>
+      </form>
+    </div>
+  </section>
+
+  <ng-container *ngIf="user">
+    <section class="topbar">
+      <div class="topbar-copy">
+        <p class="eyebrow">Marmon Internal Services</p>
+        <h1>Smart Office Booking Portal</h1>
+        <p class="subtitle">{{ user.fullName }} - {{ user.role }} - {{ user.department }}</p>
+      </div>
+      <div class="topbar-actions">
+        <div class="date-control">
+          <label for="bookingDate">Booking date</label>
+          <input id="bookingDate" class="form-control" type="date" [(ngModel)]="bookingDate" (change)="refreshDay()">
+        </div>
+        <button class="btn btn-light logout-btn" type="button" (click)="logout()">Logout</button>
+      </div>
+    </section>
+
+    <section class="metrics" *ngIf="dashboard">
+      <div class="metric">
+        <span>Total seats</span>
+        <button class="metric-link" type="button" (click)="openPreview('SEATS')">{{ dashboard.totalSeats }}</button>
+        <small>8th floor, North and South wings</small>
+      </div>
+      <div class="metric">
+        <span>Seat bookings</span>
+        <button class="metric-link" type="button" (click)="openPreview('SEAT')">{{ dashboard.seatsBooked }}</button>
+        <small>{{ dashboard.availableSeats }} seats still available</small>
+      </div>
+      <div class="metric">
+        <span>Lunch orders</span>
+        <button class="metric-link" type="button" (click)="openPreview('LUNCH')">{{ dashboard.lunchBooked }}</button>
+        <small>Submitted meals</small>
+      </div>
+      <div class="metric">
+        <span>Snack orders</span>
+        <button class="metric-link" type="button" (click)="openPreview('SNACKS')">{{ dashboard.snacksBooked }}</button>
+        <small>Submitted snacks</small>
+      </div>
+    </section>
+
+    <div class="alert alert-success py-2" *ngIf="statusMessage">{{ statusMessage }}</div>
+    <div class="alert alert-danger py-2" *ngIf="errorMessage">{{ errorMessage }}</div>
+
+    <section class="admin-panel" *ngIf="isAdmin && dashboard">
+      <div class="section-title">
+        <span>A</span>
+        <h2>Admin dashboard</h2>
+      </div>
+      <div class="admin-grid">
+        <div class="admin-box">
+          <h2>Floor and wing occupancy</h2>
+          <div class="wing-row" *ngFor="let row of dashboard.wingSummary">
+            <span>Floor {{ row.floor }} - {{ row.wing }}</span>
+            <strong>{{ row.booked }} / 100</strong>
+          </div>
+        </div>
+        <div class="admin-box">
+          <h2>Recent submitted bookings</h2>
+          <div class="booking-row" *ngFor="let booking of dashboard.recentBookings">
+            <div>
+              <strong>{{ booking.employeeName }}</strong>
+              <span>{{ booking.serviceType }} - {{ serviceLabel(booking) }}</span>
+            </div>
+          </div>
+          <div class="empty" *ngIf="dashboard.recentBookings.length === 0">No submitted bookings yet.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="workspace" *ngIf="isEmployee">
+      <aside class="booking-panel">
+        <div class="section-title">
+          <span>1</span>
+          <h2>{{ editingCartId ? 'Edit cart item' : 'Add to cart' }}</h2>
+        </div>
+
+        <div class="service-tabs" role="tablist">
+          <button type="button" [class.active]="activeService === 'SEAT'" (click)="activeService = 'SEAT'">Seat</button>
+          <button type="button" [class.active]="activeService === 'LUNCH'" (click)="activeService = 'LUNCH'">Lunch</button>
+          <button type="button" [class.active]="activeService === 'SNACKS'" (click)="activeService = 'SNACKS'">Snacks</button>
+        </div>
+
+        <div class="read-only-note" *ngIf="submittedReadOnly">Submitted bookings are read only for employees.</div>
+
+        <div *ngIf="activeService === 'SEAT'" class="booking-choice">
+          <label class="form-label" for="seat">Available seat</label>
+          <select id="seat" class="form-select" [(ngModel)]="selectedSeatId" [disabled]="submittedReadOnly">
+            <option *ngFor="let seat of seats" [disabled]="!seat.available" [ngValue]="seat.id">
+              {{ seat.seatCode }} - Floor {{ seat.floor }} - {{ seat.wing }}{{ seat.available ? '' : ' - unavailable' }}
+            </option>
+          </select>
+        </div>
+
+        <div *ngIf="activeService === 'LUNCH'" class="booking-choice option-list">
+          <label *ngFor="let option of lunchOptions" class="option-row">
+            <input type="radio" name="lunch" [value]="option.id" [(ngModel)]="selectedLunchId" [disabled]="submittedReadOnly">
+            <span>
+              <strong>{{ option.name }}</strong>
+              <small>{{ option.description }} - Rs. {{ option.price }}</small>
+            </span>
+          </label>
+        </div>
+
+        <div *ngIf="activeService === 'SNACKS'" class="booking-choice option-list">
+          <label *ngFor="let option of snackOptions" class="option-row">
+            <input type="radio" name="snacks" [value]="option.id" [(ngModel)]="selectedSnackId" [disabled]="submittedReadOnly">
+            <span>
+              <strong>{{ option.name }}</strong>
+              <small>{{ option.description }} - Rs. {{ option.price }}</small>
+            </span>
+          </label>
+        </div>
+
+        <button class="btn btn-primary w-100 mt-3" type="button" [disabled]="loading || submittedReadOnly" (click)="addOrUpdateCart()">
+          {{ editingCartId ? 'Update cart' : 'Add to cart' }}
+        </button>
+      </aside>
+
+      <section class="seat-panel">
+        <div class="panel-header">
+          <div>
+            <div class="section-title inline">
+              <span>2</span>
+              <h2>Seat availability</h2>
+            </div>
+            <p>{{ availableSeatCount }} seats available in current view</p>
+          </div>
+          <div class="filters">
+            <select class="form-select" [(ngModel)]="floorFilter">
+              <option *ngFor="let floor of floors" [value]="floor">{{ floor === 'All' ? 'All floors' : '8th Floor' }}</option>
+            </select>
+            <select class="form-select" [(ngModel)]="wingFilter">
+              <option *ngFor="let wing of wings" [value]="wing">{{ wing }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="seat-grid">
+          <button
+            type="button"
+            class="seat-tile"
+            *ngFor="let seat of filteredSeats"
+            [class.booked]="!seat.available"
+            [class.selected]="seat.id === selectedSeatId"
+            [disabled]="!seat.available || submittedReadOnly"
+            (click)="selectedSeatId = seat.id; activeService = 'SEAT'"
+            [title]="seat.available ? 'Available' : 'Unavailable'">
+            <strong>{{ seat.seatCode }}</strong>
+            <span>Floor {{ seat.floor }} - {{ seat.wing }}</span>
+          </button>
+        </div>
+      </section>
+
+      <aside class="history-panel">
+        <div class="section-title">
+          <span>3</span>
+          <h2>Cart</h2>
+        </div>
+        <div class="empty" *ngIf="cart.length === 0">Cart is empty.</div>
+        <article class="booking-row" *ngFor="let item of cart">
+          <div>
+            <strong>{{ item.serviceType }}</strong>
+            <span>{{ serviceLabel(item) }}</span>
+          </div>
+          <div class="row-actions">
+            <button class="btn btn-link btn-sm" type="button" (click)="editCart(item)">Edit</button>
+            <button class="btn btn-link btn-sm text-danger" type="button" (click)="deleteCart(item.id)">Delete</button>
+          </div>
+        </article>
+        <button class="btn btn-primary w-100 mt-3" type="button" [disabled]="cart.length === 0 || loading" (click)="submitCart()">Final submit</button>
+
+        <div class="section-title submitted-title">
+          <span>4</span>
+          <h2>Submitted read-only</h2>
+        </div>
+        <div class="empty" *ngIf="bookings.length === 0">No final submitted bookings.</div>
+        <article class="booking-row" *ngFor="let booking of bookings">
+          <div>
+            <strong>{{ booking.serviceType }}</strong>
+            <span>{{ serviceLabel(booking) }}</span>
+          </div>
+        </article>
+      </aside>
+    </section>
+
+    <section class="preview-backdrop" *ngIf="previewType" (click)="closePreview()">
+      <div class="preview-popover" (click)="$event.stopPropagation()">
+        <div class="panel-header compact">
+          <h2>{{ previewTitle }}</h2>
+          <button class="btn btn-outline-secondary btn-sm" type="button" (click)="closePreview()">Close</button>
+        </div>
+        <div class="empty" *ngIf="previewRows.length === 0">No submitted records for this date.</div>
+        <article class="preview-row" *ngFor="let row of previewRows">
+          <div>
+            <strong>{{ row.employeeName }}</strong>
+            <span>{{ row.department }}</span>
+          </div>
+          <b>{{ row.item }}</b>
+        </article>
+      </div>
+    </section>
+  </ng-container>
+</main>
